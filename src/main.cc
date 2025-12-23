@@ -15,19 +15,11 @@ int main(int argc, char *argv[]) {
     // 创建 Qt 应用
     QApplication app(argc, argv);
 
-    // 获取可执行文件所在目录
-    QString appDir = QCoreApplication::applicationDirPath();
-    
-    // 使用固定配置的模型路径 (相对于可执行文件目录)
-    std::string yolov8_face_model = (appDir + "/" + QString::fromStdString(Config::Path::YOLO_MODEL)).toStdString();
-    std::string facenet_model = (appDir + "/" + QString::fromStdString(Config::Path::FACENET_MODEL)).toStdString();
-    
-    // 从配置文件加载摄像头设置（固定 USB + 异步）
-    std::string camera_source = "usb";
+    // 获取路径配置 (直接从 Config 获取)
+    std::string yolov8_face_model = Config::Path::YOLO_MODEL;
+    std::string facenet_model = Config::Path::FACENET_MODEL;
+    std::string db_path = Config::Path::DATABASE;
     int camera_id = Config::Default::CAMERA_ID;
-    
-    // 数据库路径 (相对于可执行文件目录)
-    std::string db_path = (appDir + "/" + QString::fromStdString(Config::Path::DATABASE)).toStdString();
     
     // 确保数据库目录存在
     QDir dbDir = QFileInfo(QString::fromStdString(db_path)).dir();
@@ -36,26 +28,12 @@ int main(int argc, char *argv[]) {
         std::cout << "Created database directory: " << dbDir.absolutePath().toStdString() << std::endl;
     }
     
-    // 命令行参数解析
-    if (argc >= 3) {
-        yolov8_face_model = argv[1];
-        facenet_model = argv[2];
-    }
-    if (argc >= 5) {
-        camera_source = argv[3];
-        camera_id = std::atoi(argv[4]);
-    }
-    if (argc >= 6) {
-        db_path = argv[5];
-    }
-    
-    // 使用 cout 打印配置信息，安全且易读
+    // 打印配置信息
     std::cout << "========================================" << std::endl;
-    std::cout << "Configuration:" << std::endl;
+    std::cout << "Configuration (from config.h):" << std::endl;
     std::cout << "  YOLOv8-face model: " << yolov8_face_model << std::endl;
     std::cout << "  FaceNet model: " << facenet_model << std::endl;
-    std::cout << "  Camera source: " << camera_source << std::endl;
-    std::cout << "  Camera ID: " << camera_id << std::endl;
+    std::cout << "  Camera ID: " << Config::Default::CAMERA_ID << std::endl;
     std::cout << "  Database: " << db_path << std::endl;
     std::cout << "========================================" << std::endl;
 
@@ -65,10 +43,12 @@ int main(int argc, char *argv[]) {
     // 创建控制器并绑定视图
     AppController controller(&main_window);
 
-    // 启动应用逻辑 (开启摄像头 index 21)
+    // 启动应用逻辑
     if (controller.start(Config::Default::CAMERA_ID, 
                          Config::Camera::WIDTH, 
-                         Config::Camera::HEIGHT)) {
+                         Config::Camera::HEIGHT,
+                         yolov8_face_model,
+                         facenet_model)) {
         main_window.show();
         return app.exec();
     }

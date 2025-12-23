@@ -4,8 +4,11 @@
 #include <QObject>
 #include <QTimer>
 #include <QImage>
+#include <string>                           // 新增
 #include "app/performance_monitor.h"        // 性能监控线程
 #include "app/preprocessing_thread.h"       // 预处理线程
+#include "app/inference_thread.h"           // 推理线程 (新增)
+#include "core/model_manager.h"             // 模型管理 (新增)
 #include "hardware/camera_device.h"
 #include "cameraview.h"
 
@@ -13,6 +16,8 @@
 // 前向声明，提高编译速度
 class PreprocessingThread;          // 预处理线程
 class PerformanceMonitor;           // 性能监控线程
+class InferenceThread;              // 推理线程 (新增)
+class ModelManager;                 // 模型管理 (新增)
 class CameraView;
 
 /**
@@ -26,7 +31,10 @@ public:
     ~AppController();
 
     // 启动整个流水线
-    bool start(int camIndex, int w = 640, int h = 480);
+    // 增加模型路径参数
+    bool start(int camIndex, int w, int h, 
+               const std::string& yolo_path, 
+               const std::string& facenet_path);
 
 private slots:
     // 定时器槽函数：负责从硬件层“抽取”数据并推送到 UI
@@ -44,6 +52,9 @@ private:
 
     // APP
     PreprocessingThread *m_preThread; // 预处理线程
+    InferenceThread *m_inferenceThread; // 推理线程 (新增)
+    ModelManager *m_modelManager;       // 模型管理 (新增)
+    
     // 辅助线程
     PerformanceMonitor *m_monitor; // 性能监控线程
 };

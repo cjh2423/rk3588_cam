@@ -26,13 +26,13 @@ namespace Config {
 
 // ==================== 路径配置 [固定] ====================
 namespace Path {
-    // 模型路径 (相对于可执行文件目录)
-    constexpr const char* YOLO_MODEL = "model/yolov8n-face-zjykzj.rknn";
-    constexpr const char* FACENET_MODEL = "model/w600k_mbf.rknn";
+    // 模型绝对路径 (针对 RK3588 开发板环境)
+    constexpr const char* YOLO_MODEL = "/home/firefly/RK_NPU2_SDK/my_model/rknn/yolov8n-face-zjykzj.rknn";
+    constexpr const char* FACENET_MODEL = "/home/firefly/RK_NPU2_SDK/my_model/rknn/w600k_resnet50.rknn";
     
-    // 数据路径（单库）
-    constexpr const char* FEATURE_LIB = "data/face_feature_lib/";
-    constexpr const char* DATABASE = "data/database/face_recognition.db";
+    // 数据路径 (绝对路径)
+    constexpr const char* FEATURE_LIB = "/home/firefly/cjh/cam_demo/data/face_feature_lib/";
+    constexpr const char* DATABASE = "/home/firefly/cjh/cam_demo/data/database/face_recognition.db";
 }
 
 // ==================== 模型参数 [固定] ====================
