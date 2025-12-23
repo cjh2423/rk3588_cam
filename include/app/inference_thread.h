@@ -24,9 +24,8 @@ public:
     // 推送任务 (由 PreprocessingThread 或 AppController 调用)
     void push_task(const PreprocessTask& task);
 
-    // 获取最新处理结果 (用于 UI 显示)
-    // 简单起见，这里我们返回带画图结果的 task，或者仅返回检测数据
-    bool get_latest_result(PreprocessTask& result);
+    // 获取最新处理结果 (仅获取数据，不含图像)
+    bool get_latest_result(detect_result_group_t& result);
 
 private:
     void thread_loop();
@@ -46,7 +45,7 @@ private:
     std::queue<PreprocessTask> task_queue_;
     
     std::mutex result_mutex_;
-    PreprocessTask latest_result_;
+    detect_result_group_t latest_result_; // 仅存储坐标数据
     bool has_new_result_;
 
     // 限制队列长度，防止堆积

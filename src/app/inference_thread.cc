@@ -64,14 +64,15 @@ void InferenceThread::push_task(const PreprocessTask& task) {
     queue_cv_.notify_one();
 }
 
-bool InferenceThread::get_latest_result(PreprocessTask& result) {
+bool InferenceThread::get_latest_result(detect_result_group_t& result) {
     std::lock_guard<std::mutex> lock(result_mutex_);
     if (!has_new_result_) return false;
     
-    result = latest_result_;
-    // 不置 false，允许 UI 重复读取（虽然 UI 应该也是事件驱动）
-    // 或者置 false 避免重复渲染
-    has_new_result_ = false; 
+    // 拷贝结果
+    memcpy(&result, &latest_result_, sizeof(detect_result_group_t));
+    
+    // 不置 false，允许 UI 持续获取该结果直到有更新的
+    // has_new_result_ = false; 
     return true;
 }
 
@@ -125,41 +126,28 @@ void InferenceThread::thread_loop() {
             );
         
             if (ret == 0) {
-                // --- 2. 遍历人脸进行识别 ---
+                // --- 2. 遍历人脸 (仅做逻辑处理，不画图) ---
+                // TODO: 可以在这里做 FaceNet 特征提取
+                /*
                 for (int i = 0; i < detect_result.count; i++) {
                     detect_result_t& face = detect_result.results[i];
-                    
-                    // 简单的画框测试
-                    cv::rectangle(task.orig_img, 
-                        cv::Point(face.box.left, face.box.top), 
-                        cv::Point(face.box.right, face.box.bottom), 
-                        cv::Scalar(0, 255, 0), 2);
-
-                    // 简单的关键点画圆
-                    cv::circle(task.orig_img, cv::Point(face.point.point_1_x, face.point.point_1_y), 2, cv::Scalar(0, 0, 255), -1);
-                    cv::circle(task.orig_img, cv::Point(face.point.point_2_x, face.point.point_2_y), 2, cv::Scalar(0, 0, 255), -1);
-                    cv::circle(task.orig_img, cv::Point(face.point.point_3_x, face.point.point_3_y), 2, cv::Scalar(0, 0, 255), -1);
-                    cv::circle(task.orig_img, cv::Point(face.point.point_4_x, face.point.point_4_y), 2, cv::Scalar(0, 0, 255), -1);
-                    cv::circle(task.orig_img, cv::Point(face.point.point_5_x, face.point.point_5_y), 2, cv::Scalar(0, 0, 255), -1);
-
-                    // TODO: 
-                    // 1. 根据 5点 做仿射变换对齐 (Align) -> 112x112
-                    // 2. Facenet inference (使用 model_manager->get_facenet_ctx())
-                    // 3. 数据库搜索
+                    // align_face(...)
+                    // inference_facenet(...)
                 }
+                */
             }
         }
 
-        // --- 3. 更新结果 ---
+        // --- 3. 更新结果 (只更新数据) ---
         {
             std::lock_guard<std::mutex> lock(result_mutex_);
-            latest_result_ = task; // 这里 task.orig_img 已经被画上了框
+            latest_result_ = detect_result; 
             has_new_result_ = true;
         }
 
         // 性能监控
         if (monitor_) {
-            // monitor_->markInference(); // 需要在 Monitor 加接口
+            // monitor_->markInference(); 
         }
     }
 }

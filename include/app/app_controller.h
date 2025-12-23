@@ -9,6 +9,7 @@
 #include "app/preprocessing_thread.h"       // 预处理线程
 #include "app/inference_thread.h"           // 推理线程 (新增)
 #include "core/model_manager.h"             // 模型管理 (新增)
+#include "core/postprocess.h"               // 结果结构体 (新增)
 #include "hardware/camera_device.h"
 #include "cameraview.h"
 
@@ -43,6 +44,9 @@ private slots:
 private:
     // 图像转换辅助函数：cv::Mat -> QImage
     QImage cvMatToQImage(const cv::Mat &mat);
+    
+    // 辅助函数：将检测结果画在图上 (解决延迟问题的关键)
+    void drawResult(cv::Mat& frame, const detect_result_group_t& result);
 
     // 硬件
     CameraDevice m_camera;   // 硬件生产者 (之前写的异步 Camera 类)
@@ -55,6 +59,9 @@ private:
     InferenceThread *m_inferenceThread; // 推理线程 (新增)
     ModelManager *m_modelManager;       // 模型管理 (新增)
     
+    // 状态
+    detect_result_group_t m_latestResult; // 缓存最新的检测结果
+
     // 辅助线程
     PerformanceMonitor *m_monitor; // 性能监控线程
 };

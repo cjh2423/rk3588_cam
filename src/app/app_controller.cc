@@ -24,6 +24,8 @@
 #include <QCoreApplication>
 #include <iostream>
 
+#include <opencv2/imgproc.hpp>
+
 AppController::AppController(CameraView *view, QObject *parent) 
     : QObject(parent), m_view(view) {
 
@@ -35,6 +37,9 @@ AppController::AppController(CameraView *view, QObject *parent)
 
     // 初始化推理线程
     m_inferenceThread = new InferenceThread(m_modelManager, m_monitor);
+
+    // 清空结果缓存
+    memset(&m_latestResult, 0, sizeof(m_latestResult));
 
 #if (PROJECT_MODE == 0)
     // 创建一个定时器作为 UI 刷新的触发源
@@ -159,36 +164,77 @@ void AppController::onFrameTick() {
         }
     }
 #elif(PROJECT_MODE == 1)
-    // --- 模式 1：流水线处理 ---
+    // --- 模式 1：流水线处理 (UI 与 推理分离) ---
     
-    // 1. 尝试从预处理线程获取新帧，推送到推理线程
+    // 1. 尝试从预处理线程获取新帧 (Fast Path)
     PreprocessTask rawTask;
+    bool hasFrame = false;
     if (m_preThread && m_preThread->get_result(rawTask)) {
+        hasFrame = true;
         if (m_monitor) {
             m_monitor->markFrame(); // 统计采集 FPS
         }
+        
+        // 2. 将新帧推送到推理线程 (Slow Path)
+        // 只有当有新帧时才推，防止推理线程空转
         if (m_inferenceThread) {
             m_inferenceThread->push_task(rawTask);
         }
     }
 
-    // 2. 尝试从推理线程获取处理结果 (带画框的图)，显示到 UI
-    PreprocessTask resultTask;
-    if (m_inferenceThread && m_inferenceThread->get_latest_result(resultTask)) {
-        // 重点：这里的 resultTask.orig_img 已经在 InferenceThread 中画上了框
-        // 且由于 RGA 处理后内存可能对齐，必须传入 step
-        QImage qimg(resultTask.orig_img.data, 
-                    resultTask.orig_img.cols, 
-                    resultTask.orig_img.rows, 
-                    resultTask.orig_img.step, 
+    // 3. 检查是否有新的推理结果
+    // 无论是否有新帧，都可以去查一下结果，因为推理可能比采集慢
+    if (m_inferenceThread) {
+        detect_result_group_t newResult;
+        if (m_inferenceThread->get_latest_result(newResult)) {
+            m_latestResult = newResult; // 原子更新结果
+        }
+    }
+
+    // 4. 显示逻辑
+    if (hasFrame) {
+        // 关键点：我们始终显示最新的摄像头画面 rawTask.orig_img
+        // 并把"当前能拿到的最新"检测框 m_latestResult 画上去
+        
+        // 注意：orig_img 是 BGR，drawResult 会在上面直接画线
+        // 由于 rawTask.orig_img 是 RGA clone 出来的，是线程私有的，可以安全修改
+        drawResult(rawTask.orig_img, m_latestResult);
+
+        // 构造 QImage
+        // 重点：rawTask.orig_img 可能是 RGA 内存对齐的，必须传入 step
+        QImage qimg(rawTask.orig_img.data, 
+                    rawTask.orig_img.cols, 
+                    rawTask.orig_img.rows, 
+                    rawTask.orig_img.step, 
                     QImage::Format_RGB888);
 
-        // 显示：只需要交换颜色通道 (BGR->RGB)，不再需要 mirrored() (RGA 已做)
+        // 显示：交换颜色通道 (BGR->RGB)
         if (m_view) {
-            m_view->updateFrame(qimg.rgbSwapped()); // 更新 UI
+            m_view->updateFrame(qimg.rgbSwapped()); 
         }
     }
 #endif
+}
+
+void AppController::drawResult(cv::Mat& frame, const detect_result_group_t& result) {
+    for (int i = 0; i < result.count; i++) {
+        const detect_result_t& face = result.results[i];
+        
+        // 1. 画框
+        cv::rectangle(frame, 
+            cv::Point(face.box.left, face.box.top), 
+            cv::Point(face.box.right, face.box.bottom), 
+            cv::Scalar(0, 255, 0), 2);
+
+        // 2. 画关键点
+        cv::Scalar pointColor(0, 0, 255);
+        int radius = 2;
+        cv::circle(frame, cv::Point(face.point.point_1_x, face.point.point_1_y), radius, pointColor, -1);
+        cv::circle(frame, cv::Point(face.point.point_2_x, face.point.point_2_y), radius, pointColor, -1);
+        cv::circle(frame, cv::Point(face.point.point_3_x, face.point.point_3_y), radius, pointColor, -1);
+        cv::circle(frame, cv::Point(face.point.point_4_x, face.point.point_4_y), radius, pointColor, -1);
+        cv::circle(frame, cv::Point(face.point.point_5_x, face.point.point_5_y), radius, pointColor, -1);
+    }
 }
 
 QImage AppController::cvMatToQImage(const cv::Mat &mat) {
