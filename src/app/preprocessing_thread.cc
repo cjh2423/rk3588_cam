@@ -16,6 +16,7 @@
  */
 
 #include "app/preprocessing_thread.h"
+#include <iostream>
 #include "config.h"  // 必须引用配置，确保分辨率统一
 #include "RgaUtils.h"
 #include "im2d.h"
@@ -115,28 +116,31 @@ void PreprocessingThread::thread_func() {
 }
 
 void PreprocessingThread::process_with_rga(PreprocessTask& task) {
-    // A. 初始化推理用的输出容器（黑色背景）
-    task.processed_img = cv::Mat(target_h_, target_w_, CV_8UC3, cv::Scalar(0, 0, 0));
-
-    // B. RGA 翻转：使用虚拟地址包装原始数据和缓冲区
+    // RGA 翻转：使用虚拟地址包装原始数据和缓冲区
     rga_buffer_t flip_src = wrapbuffer_virtualaddr(task.orig_img.data, img_width_, img_height_, RK_FORMAT_BGR_888);
     rga_buffer_t flip_dst = wrapbuffer_virtualaddr(flipped_buffer_.data, img_width_, img_height_, RK_FORMAT_BGR_888);
     
     // 执行硬件水平翻转
-    imflip_t(flip_src, flip_dst, IM_HAL_TRANSFORM_FLIP_H, IM_SYNC);
+    IM_STATUS ret_flip = imflip_t(flip_src, flip_dst, IM_HAL_TRANSFORM_FLIP_H, IM_SYNC);
+    if (ret_flip != IM_STATUS_SUCCESS) {
+        std::cerr << "RGA flip failed! Code: " << ret_flip << std::endl;
+    }
 
-    // C. RGA 缩放：将翻转后的图缩放到 resize 目标尺寸
+    // RGA 缩放：将翻转后的图缩放到 resize 目标尺寸
     rga_buffer_t src_buf = wrapbuffer_virtualaddr(flipped_buffer_.data, img_width_, img_height_, RK_FORMAT_BGR_888);
     rga_buffer_t dst_buf = wrapbuffer_virtualaddr(resized_buffer_.data, resize_w_, resize_h_, RK_FORMAT_BGR_888);
     
     // 同步模式执行缩放 (使用 imresize_t 替代 C++ 的 improcess)
-    imresize_t(src_buf, dst_buf, 0, 0, INTER_LINEAR, IM_SYNC);
+    IM_STATUS ret = imresize_t(src_buf, dst_buf, 0, 0, INTER_LINEAR, IM_SYNC);
+    if (ret != IM_STATUS_SUCCESS) {
+        std::cerr << "RGA resize failed! Error code: " << ret << std::endl;
+    }
 
-    // D. Padding (Letterbox)：将缩放后的图像嵌入黑色正方形背景
+    // Padding (Letterbox)：将缩放后的图像嵌入黑色正方形背景
     cv::copyMakeBorder(resized_buffer_, task.processed_img,
                        pad_top_, pad_bottom_, pad_left_, pad_right_,
                        cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
 
-    // E. 克隆镜像后的原图：确保 UI 线程读取时，数据不会被下一帧覆盖
+    // 克隆镜像后的原图：确保 UI 线程读取时，数据不会被下一帧覆盖
     task.orig_img = flipped_buffer_.clone();
 }

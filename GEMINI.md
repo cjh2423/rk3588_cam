@@ -1,6 +1,6 @@
-# RK3588 AI Camera Demo (cam_demo)
+# RK3588 AI 相机演示 (cam_demo)
 
-## Project Overview
+## 项目概览
 本项目是一个专为 **Rockchip RK3588** 设计的高效异步视频处理框架。它实现了采集、预处理（RGA）、AI 推理（RKNN）与 UI 渲染（Qt5）的完全解耦。
 
 ### 核心架构
@@ -12,22 +12,23 @@
     *   **RGA**: 替代 CPU 进行图像预处理。
     *   **NPU**: 执行 YOLOv8 和 FaceNet 模型。
 
-## Directory Structure
+## 目录结构
 ```text
 /
 ├── 3rdparty/           # RKNN/RGA 库与头文件
+├── model/              # 目前使用的是开源训练好的模型
 ├── build.sh            # 虚拟机交叉编译脚本
 ├── run.sh              # 开发板运行脚本（含环境设置与日志过滤）
 ├── doc/                # 详细开发与部署文档
 ├── include/
 │   ├── app/            # 应用逻辑（Controller, Threads）
-│   ├── core/           # 算法实现（YOLO, FaceNet, ModelManager）
+│   ├── core/           # 算法实现（YOLO, FaceNet,ModelManager）
 │   └── hardware/       # 硬件封装（CameraDevice）
 ├── src/                # 源代码实现
 └── config.h            # 全局配置（含模型绝对路径）
 ```
 
-## Quick Start (Deploy)
+## 快速开始 (部署)
 1.  **编译**: `./build.sh`
 2.  **传输**: 使用 `adb push` 将 `cam_demo`, `run.sh`, `3rdparty` 传至板子。
 3.  **运行**: `adb shell "cd /home/firefly/cjh/cam_demo/ && ./run.sh"`

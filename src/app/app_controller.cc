@@ -198,6 +198,7 @@ void AppController::onFrameTick() {
         
         // 注意：orig_img 是 BGR，drawResult 会在上面直接画线
         // 由于 rawTask.orig_img 是 RGA clone 出来的，是线程私有的，可以安全修改
+        // 警告：drawResult 会就地修改 orig_img。如果推理线程需要干净的 orig_img（例如用于 FaceNet），则必须改为在副本上绘制
         drawResult(rawTask.orig_img, m_latestResult);
 
         // 构造 QImage
