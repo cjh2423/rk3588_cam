@@ -30,7 +30,7 @@
 
 ## 快速开始 (部署)
 1.  **编译**: `./build.sh`
-2.  **传输**: 使用 `adb push` 将 `cam_demo`, `run.sh`, `3rdparty` 传至板子。
+2.  **传输**: 使用 `adb push` 将 `cam_demo`, `run.sh`, `3rdparty`,`model中的rknn文件` 传至板子。
 3.  **运行**: `adb shell "cd /home/firefly/cjh/cam_demo/ && ./run.sh"`
 
 详细步骤请参阅 `doc/部署.md`。
