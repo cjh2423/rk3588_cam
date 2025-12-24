@@ -32,7 +32,7 @@ namespace Path {
     
     // 数据路径 (绝对路径)
     constexpr const char* FEATURE_LIB = "/home/firefly/cjh/cam_demo/data/face_feature_lib/";
-    constexpr const char* DATABASE = "/home/firefly/cjh/cam_demo/data/database/face_recognition.db";
+    constexpr const char* DATABASE = "./data.db";
 }
 
 // ==================== 模型参数 [固定] ====================

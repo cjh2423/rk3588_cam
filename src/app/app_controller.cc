@@ -25,6 +25,8 @@
 #include <iostream>
 
 #include <opencv2/imgproc.hpp>
+#include "database/database_manager.h"
+#include "service/feature_library.h"
 
 AppController::AppController(CameraView *view, QObject *parent) 
     : QObject(parent), m_view(view) {
@@ -117,6 +119,15 @@ bool AppController::start(int camIndex, int w, int h,
     // --- 加载模型 ---
     // 使用传入的参数，不再自己拼装路径
     
+    // 0. 初始化数据库
+    if (!db::DatabaseManager::instance().open(Config::Path::DATABASE)) {
+        std::cerr << "Failed to open database: " << Config::Path::DATABASE << std::endl;
+        // 数据库失败不应该阻塞相机预览，但考勤功能将不可用
+    } else {
+        // 加载特征库
+        service::FeatureLibrary::instance().load_from_database();
+    }
+
     // 加载 YOLOv8
     if (m_modelManager->init_face_detector(yolo_path.c_str()) != 0) {
         std::cerr << "Failed to load YOLOv8 model: " << yolo_path << std::endl;

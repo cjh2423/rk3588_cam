@@ -27,6 +27,10 @@
 #include "core/facenet.h"
 #include "core/postprocess.h"
 
+#include "service/feature_library.h"
+#include "service/attendance_service.h"
+#include "database/user_dao.h"
+
 InferenceThread::InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor)
     : model_manager_(model_manager)
     , monitor_(monitor)
@@ -126,15 +130,69 @@ void InferenceThread::thread_loop() {
             );
         
             if (ret == 0) {
-                // --- 2. 遍历人脸 (仅做逻辑处理，不画图) ---
-                // TODO: 可以在这里做 FaceNet 特征提取
-                /*
+                // --- 2. 遍历人脸 (特征提取与识别) ---
+                int fn_w, fn_h, fn_c;
+                model_manager_->get_facenet_size(fn_w, fn_h, fn_c);
+
                 for (int i = 0; i < detect_result.count; i++) {
                     detect_result_t& face = detect_result.results[i];
-                    // align_face(...)
-                    // inference_facenet(...)
+                    
+                    // 简单的裁剪 (TODO: 使用关键点进行人脸对齐)
+                    cv::Rect roi(face.box.left, face.box.top, 
+                                 face.box.right - face.box.left, 
+                                 face.box.bottom - face.box.top);
+                                 
+                    // 边界检查
+                    roi = roi & cv::Rect(0, 0, task.orig_img.cols, task.orig_img.rows);
+                    if (roi.area() <= 0) continue;
+                    
+                    if (fn_w > 0 && fn_h > 0) {
+                        cv::Mat face_img = task.orig_img(roi).clone();
+                        cv::Mat resized_face;
+                        cv::resize(face_img, resized_face, cv::Size(fn_w, fn_h));
+                        
+                        // FaceNet 推理
+                        float* embedding = nullptr;
+                        int ret_fn = facenet_inference(
+                            model_manager_->get_facenet_ctx(),
+                            resized_face,
+                            model_manager_->get_facenet_io_num(),
+                            model_manager_->get_facenet_inputs(),
+                            model_manager_->get_facenet_outputs(),
+                            &embedding
+                        );
+                        
+                        if (ret_fn == 0 && embedding) {
+                            // 搜索
+                            std::vector<float> feature(embedding, embedding + 512);
+                            float similarity = 0.0f;
+                            // 阈值设为 0.5 (根据 postprocess.h 定义)
+                            int64_t user_id = service::FeatureLibrary::instance().search(feature, FACENET_THRESH, similarity);
+                            
+                            if (user_id != -1) {
+                                // 找到用户
+                                db::UserDao userDao;
+                                auto user = userDao.get_user_by_id(user_id);
+                                if (user) {
+                                    strncpy(face.name, user->user_name.c_str(), OBJ_NAME_MAX_SIZE - 1);
+                                    
+                                    // 记录考勤
+                                    service::AttendanceService attendanceService;
+                                    attendanceService.record_attendance(user_id, similarity);
+                                }
+                            } else {
+                                strncpy(face.name, "Unknown", OBJ_NAME_MAX_SIZE - 1);
+                            }
+                            
+                            // 释放 FaceNet 输出
+                            facenet_output_release(
+                                model_manager_->get_facenet_ctx(),
+                                model_manager_->get_facenet_io_num(),
+                                model_manager_->get_facenet_outputs()
+                            );
+                        }
+                    }
                 }
-                */
             }
         }
 
