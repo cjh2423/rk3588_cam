@@ -37,6 +37,16 @@ public:
                const std::string& yolo_path, 
                const std::string& facenet_path);
 
+    // 注册新用户 (返回 user_id, 失败返回 -1)
+    int64_t registerUser(const std::string& name, const std::string& dept);
+
+signals:
+    // 图像更新信号 (用于多界面分发)
+    void frameReady(const QImage& image);
+    
+    // 注册结果信号
+    void registrationFinished(bool success, const QString& message);
+
 private slots:
     // 定时器槽函数：负责从硬件层“抽取”数据并推送到 UI
     void onFrameTick();

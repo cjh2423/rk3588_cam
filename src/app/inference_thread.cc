@@ -59,7 +59,7 @@ void InferenceThread::stop() {
 
 void InferenceThread::push_task(const PreprocessTask& task) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
-    if (task_queue_.size() >= MAX_QUEUE_SIZE) {
+    if (task_queue_.size() >= Config::Performance::QUEUE_MAX_SIZE) {
         // 丢弃旧帧，保证实时性
         task_queue_.pop();
     }
@@ -77,6 +77,13 @@ bool InferenceThread::get_latest_result(detect_result_group_t& result) {
     
     // 不置 false，允许 UI 持续获取该结果直到有更新的
     // has_new_result_ = false; 
+    return true;
+}
+
+bool InferenceThread::get_latest_feature(std::vector<float>& feature) {
+    std::lock_guard<std::mutex> lock(result_mutex_);
+    if (latest_feature_.empty()) return false;
+    feature = latest_feature_;
     return true;
 }
 
@@ -165,6 +172,17 @@ void InferenceThread::thread_loop() {
                         if (ret_fn == 0 && embedding) {
                             // 搜索
                             std::vector<float> feature(embedding, embedding + 512);
+                            
+                            // 【新增】如果只有一张人脸，缓存特征用于注册
+                            if (detect_result.count == 1) {
+                                std::lock_guard<std::mutex> lock(result_mutex_);
+                                latest_feature_ = feature;
+                            } else {
+                                // 多人脸或无人脸时清空，避免注册错误的特征
+                                std::lock_guard<std::mutex> lock(result_mutex_);
+                                latest_feature_.clear();
+                            }
+
                             float similarity = 0.0f;
                             // 阈值设为 0.5 (根据 postprocess.h 定义)
                             int64_t user_id = service::FeatureLibrary::instance().search(feature, FACENET_THRESH, similarity);

@@ -24,14 +24,15 @@ public:
     // 推送任务 (由 PreprocessingThread 或 AppController 调用)
     void push_task(const PreprocessTask& task);
 
-    // 获取最新处理结果 (仅获取数据，不含图像)
+    // 获取最新检测结果
     bool get_latest_result(detect_result_group_t& result);
+
+    // 获取当前人脸特征 (用于注册)
+    // 只有当画面中仅有一个人脸时有效
+    bool get_latest_feature(std::vector<float>& feature);
 
 private:
     void thread_loop();
-    
-    // 人脸对齐辅助函数
-    cv::Mat align_face(const cv::Mat& src, const float* landmarks);
 
 private:
     ModelManager* model_manager_;
@@ -45,11 +46,9 @@ private:
     std::queue<PreprocessTask> task_queue_;
     
     std::mutex result_mutex_;
-    detect_result_group_t latest_result_; // 仅存储坐标数据
+    detect_result_group_t latest_result_;
+    std::vector<float> latest_feature_; // 缓存的特征向量
     bool has_new_result_;
-
-    // 限制队列长度，防止堆积
-    const size_t MAX_QUEUE_SIZE = 3;
 };
 
 #endif // INFERENCE_THREAD_H

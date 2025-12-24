@@ -26,6 +26,8 @@
 
 #include <opencv2/imgproc.hpp>
 #include "database/database_manager.h"
+#include "database/user_dao.h"
+#include "database/face_feature_dao.h"
 #include "service/feature_library.h"
 
 AppController::AppController(CameraView *view, QObject *parent) 
@@ -157,6 +159,62 @@ bool AppController::start(int camIndex, int w, int h,
     return true;
 }
 
+int64_t AppController::registerUser(const std::string& name, const std::string& dept) {
+#if (PROJECT_MODE == 1)
+    if (!m_inferenceThread) return -1;
+
+    std::vector<float> feature;
+    // 尝试获取最新一帧的特征
+    if (!m_inferenceThread->get_latest_feature(feature)) {
+        emit registrationFinished(false, "No face detected or multiple faces!");
+        return -1;
+    }
+    
+    // 1. 写入 User 表
+    db::User user;
+    user.user_name = name;
+    user.department = dept;
+    user.status = 1;
+    
+    db::UserDao userDao;
+    // 简单查重：名字是否已存在
+    auto exist = userDao.get_user_by_name(name);
+    if (exist) {
+         emit registrationFinished(false, "User name already exists!");
+         return -1;
+    }
+    
+    int64_t uid = userDao.add_user(user);
+    if (uid == -1) {
+        emit registrationFinished(false, "Database error: add_user failed");
+        return -1;
+    }
+    
+    // 2. 写入 Feature 表
+    db::FaceFeature ff;
+    ff.user_id = uid;
+    ff.feature_vector = feature;
+    ff.feature_quality = 1.0f; // 暂未做质量评估
+    
+    db::FaceFeatureDao featureDao;
+    if (featureDao.add_feature(ff) == -1) {
+        // 回滚用户
+        userDao.delete_user(uid);
+        emit registrationFinished(false, "Database error: add_feature failed");
+        return -1;
+    }
+    
+    // 3. 刷新内存特征库
+    service::FeatureLibrary::instance().load_from_database();
+    
+    emit registrationFinished(true, QString("Success! User ID: %1").arg(uid));
+    return uid;
+#else
+    emit registrationFinished(false, "AI Mode not enabled");
+    return -1;
+#endif
+}
+
 void AppController::onFrameTick() {
 #if (PROJECT_MODE == 0)
     cv::Mat frame;
@@ -173,6 +231,7 @@ void AppController::onFrameTick() {
         if (m_view) {
             m_view->updateFrame(qimg);
         }
+        emit frameReady(qimg); // 广播信号
     }
 #elif(PROJECT_MODE == 1)
     // --- 模式 1：流水线处理 (UI 与 推理分离) ---
@@ -224,6 +283,7 @@ void AppController::onFrameTick() {
         if (m_view) {
             m_view->updateFrame(qimg.rgbSwapped()); 
         }
+        emit frameReady(qimg.rgbSwapped()); // 广播信号
     }
 #endif
 }
@@ -232,14 +292,36 @@ void AppController::drawResult(cv::Mat& frame, const detect_result_group_t& resu
     for (int i = 0; i < result.count; i++) {
         const detect_result_t& face = result.results[i];
         
+        // 判定是否是已知用户 (假设 name 不为 "Unknown" 且非空即为已知)
+        bool isKnown = (strlen(face.name) > 0 && strcmp(face.name, "Unknown") != 0 && strcmp(face.name, "face") != 0);
+        cv::Scalar boxColor = isKnown ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255); // 绿: 已知, 红: 未知
+        
         // 1. 画框
         cv::rectangle(frame, 
             cv::Point(face.box.left, face.box.top), 
             cv::Point(face.box.right, face.box.bottom), 
-            cv::Scalar(0, 255, 0), 2);
+            boxColor, 2);
 
-        // 2. 画关键点
-        cv::Scalar pointColor(0, 0, 255);
+        // 2. 显示名字 (如果是已知用户)
+        if (isKnown) {
+             std::string label = face.name;
+             int baseLine = 0;
+             cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.8, 2, &baseLine);
+             
+             // 名字背景框
+             cv::rectangle(frame, 
+                 cv::Point(face.box.left, face.box.top - labelSize.height - 10), 
+                 cv::Point(face.box.left + labelSize.width, face.box.top), 
+                 boxColor, cv::FILLED);
+                 
+             // 名字文本 (黑色字体)
+             cv::putText(frame, label, 
+                 cv::Point(face.box.left, face.box.top - 5), 
+                 cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 0), 2);
+        }
+
+        // 3. 画关键点
+        cv::Scalar pointColor(0, 255, 255); // 黄色关键点
         int radius = 2;
         cv::circle(frame, cv::Point(face.point.point_1_x, face.point.point_1_y), radius, pointColor, -1);
         cv::circle(frame, cv::Point(face.point.point_2_x, face.point.point_2_y), radius, pointColor, -1);

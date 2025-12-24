@@ -16,15 +16,28 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
         "padding: 5px; border-radius: 3px;"
     );
 
-    m_closeButton = new QPushButton("退出程序", this);
+    // 功能按钮栏
+    auto *btnLayout = new QHBoxLayout();
+    m_btnManage = new QPushButton("用户管理", this);
+    m_btnRegister = new QPushButton("注册人脸", this);
+    m_closeButton = new QPushButton("退出", this);
+    
+    m_btnManage->setFixedHeight(40);
+    m_btnRegister->setFixedHeight(40);
     m_closeButton->setFixedHeight(40);
+    
+    btnLayout->addWidget(m_btnManage);
+    btnLayout->addWidget(m_btnRegister);
+    btnLayout->addWidget(m_closeButton);
 
     layout->addWidget(m_imageLabel);
     layout->addWidget(m_statsLabel); 
-    layout->addWidget(m_closeButton);
+    layout->addLayout(btnLayout);
 
+    connect(m_btnManage, &QPushButton::clicked, this, &CameraView::openUserManager);
+    connect(m_btnRegister, &QPushButton::clicked, this, &CameraView::openRegistration);
     connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
-    setWindowTitle("RK3588 Camera Test");
+    setWindowTitle("RK3588 Camera AI Demo");
 }
 
 void CameraView::updateFrame(const QImage &frame) {

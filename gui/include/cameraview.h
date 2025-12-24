@@ -23,7 +23,14 @@ public slots:
 private:
     QLabel *m_imageLabel;    // 画面显示控件
     QLabel *m_statsLabel;    // 性能数据显示控件 (新增)
+    
+    QPushButton *m_btnManage;   // 用户管理
+    QPushButton *m_btnRegister; // 人脸注册
     QPushButton *m_closeButton;
+    
+signals:
+    void openUserManager();
+    void openRegistration();
 };
 
 #endif

@@ -9,6 +9,8 @@
 #include "app/app_controller.h"
 // gui
 #include "cameraview.h"
+#include "usermanager_widget.h"
+#include "registration_dialog.h"
 
 #if 1
 int main(int argc, char *argv[]) {
@@ -42,9 +44,20 @@ int main(int argc, char *argv[]) {
     
     // 创建控制器并绑定视图
     AppController controller(&main_window);
+    
+    // 连接主界面的信号到对话框槽函数 (使用 Lambda 延迟创建对话框)
+    QObject::connect(&main_window, &CameraView::openUserManager, [&]() {
+        UserManagerWidget mgr;
+        mgr.exec(); // 模态对话框
+    });
+    
+    QObject::connect(&main_window, &CameraView::openRegistration, [&]() {
+        RegistrationDialog reg(&controller);
+        reg.exec(); // 模态对话框
+    });
 
     // 启动应用逻辑
-    if (controller.start(Config::Default::CAMERA_ID, 
+    if (controller.start(Config::Default::CAMERA_ID,  
                          Config::Camera::WIDTH, 
                          Config::Camera::HEIGHT,
                          yolov8_face_model,
