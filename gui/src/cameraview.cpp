@@ -19,7 +19,7 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     // 功能按钮栏
     auto *btnLayout = new QHBoxLayout();
     m_btnManage = new QPushButton("用户管理", this);
-    m_btnRegister = new QPushButton("注册人脸", this);
+    m_btnRegister = new QPushButton("人脸注册", this);
     m_closeButton = new QPushButton("退出", this);
     
     m_btnManage->setFixedHeight(40);
@@ -37,7 +37,7 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     connect(m_btnManage, &QPushButton::clicked, this, &CameraView::openUserManager);
     connect(m_btnRegister, &QPushButton::clicked, this, &CameraView::openRegistration);
     connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
-    setWindowTitle("RK3588 Camera AI Demo");
+    setWindowTitle("RK3588 智能相机演示");
 }
 
 void CameraView::updateFrame(const QImage &frame) {
@@ -47,5 +47,5 @@ void CameraView::updateFrame(const QImage &frame) {
 
 void CameraView::updateStats(float fps, double /*unused*/) {
     // 只更新 FPS 文字
-    m_statsLabel->setText(QString("Camera FPS: %1").arg(static_cast<double>(fps), 0, 'f', 1));
+    m_statsLabel->setText(QString("画面帧率: %1 FPS").arg(static_cast<double>(fps), 0, 'f', 1));
 }

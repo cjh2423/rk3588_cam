@@ -27,8 +27,8 @@ namespace Config {
 // ==================== 路径配置 [固定] ====================
 namespace Path {
     // 模型绝对路径 (针对 RK3588 开发板环境)
-    constexpr const char* YOLO_MODEL = "/home/firefly/RK_NPU2_SDK/my_model/rknn/yolov8n-face-zjykzj.rknn";
-    constexpr const char* FACENET_MODEL = "/home/firefly/RK_NPU2_SDK/my_model/rknn/w600k_resnet50.rknn";
+    constexpr const char* YOLO_MODEL = "/home/firefly/cjh/cam_demo/model/yolov8n-face-zjykzj.rknn";
+    constexpr const char* FACENET_MODEL = "/home/firefly/cjh/cam_demo/model/w600k_resnet50.rknn";
     
     // 数据路径 (绝对路径)
     constexpr const char* FEATURE_LIB = "/home/firefly/cjh/cam_demo/data/face_feature_lib/";
@@ -68,6 +68,9 @@ namespace Default {
     constexpr int DUPLICATE_CHECK_INTERVAL = 300;  // 防重复打卡间隔 (秒)
     constexpr int RECOGNITION_CONFIRM_COUNT = 5;   // 识别确认次数
     constexpr int USER_CONFIRM_DURATION_MS = 1000; // 用户确认时间 (毫秒)
+    
+    // 注册设置
+    constexpr int REGISTRATION_SAMPLE_COUNT = 3;   // 注册时采集的样本数量
 
     // 音频设置
     constexpr int AUDIO_VOLUME = 100;               // 默认音量 (0-100)

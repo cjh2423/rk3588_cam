@@ -37,8 +37,11 @@ public:
                const std::string& yolo_path, 
                const std::string& facenet_path);
 
-    // 注册新用户 (返回 user_id, 失败返回 -1)
-    int64_t registerUser(const std::string& name, const std::string& dept);
+    // 获取当前画面中的人脸特征 (用于注册)
+    bool getLatestFeature(std::vector<float>& feature);
+
+    // 注册新用户 (传入已采集并处理好的特征)
+    int64_t registerUser(const std::string& name, const std::string& dept, const std::vector<float>& feature);
 
 signals:
     // 图像更新信号 (用于多界面分发)

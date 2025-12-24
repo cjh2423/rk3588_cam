@@ -159,14 +159,15 @@ bool AppController::start(int camIndex, int w, int h,
     return true;
 }
 
-int64_t AppController::registerUser(const std::string& name, const std::string& dept) {
-#if (PROJECT_MODE == 1)
-    if (!m_inferenceThread) return -1;
+bool AppController::getLatestFeature(std::vector<float>& feature) {
+    if (!m_inferenceThread) return false;
+    return m_inferenceThread->get_latest_feature(feature);
+}
 
-    std::vector<float> feature;
-    // 尝试获取最新一帧的特征
-    if (!m_inferenceThread->get_latest_feature(feature)) {
-        emit registrationFinished(false, "No face detected or multiple faces!");
+int64_t AppController::registerUser(const std::string& name, const std::string& dept, const std::vector<float>& feature) {
+#if (PROJECT_MODE == 1)
+    if (feature.empty()) {
+        emit registrationFinished(false, "Feature vector is empty!");
         return -1;
     }
     

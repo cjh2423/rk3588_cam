@@ -6,7 +6,7 @@
 #include <QMessageBox>
 
 UserManagerWidget::UserManagerWidget(QWidget *parent) : QDialog(parent) {
-    setWindowTitle("User Management");
+    setWindowTitle("用户管理");
     resize(600, 400);
     
     auto *mainLayout = new QVBoxLayout(this);
@@ -14,7 +14,7 @@ UserManagerWidget::UserManagerWidget(QWidget *parent) : QDialog(parent) {
     // Table
     m_table = new QTableWidget(this);
     m_table->setColumnCount(4);
-    m_table->setHorizontalHeaderLabels({"ID", "Name", "Employee ID", "Department"});
+    m_table->setHorizontalHeaderLabels({"用户ID", "姓名", "工号", "部门"});
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -22,9 +22,9 @@ UserManagerWidget::UserManagerWidget(QWidget *parent) : QDialog(parent) {
     
     // Buttons
     auto *btnLayout = new QHBoxLayout();
-    m_btnRefresh = new QPushButton("Refresh", this);
-    m_btnDelete = new QPushButton("Delete User", this);
-    m_btnClose = new QPushButton("Close", this);
+    m_btnRefresh = new QPushButton("刷新列表", this);
+    m_btnDelete = new QPushButton("删除用户", this);
+    m_btnClose = new QPushButton("关闭", this);
     
     btnLayout->addWidget(m_btnRefresh);
     btnLayout->addWidget(m_btnDelete);
@@ -62,8 +62,8 @@ void UserManagerWidget::deleteSelectedUser() {
     int64_t userId = m_table->item(row, 0)->text().toLongLong();
     QString userName = m_table->item(row, 1)->text();
     
-    if (QMessageBox::question(this, "Confirm Delete", 
-            "Are you sure you want to delete user: " + userName + "?") == QMessageBox::Yes) {
+    if (QMessageBox::question(this, "确认删除", 
+            "确定要删除用户: " + userName + " 吗？") == QMessageBox::Yes) {
         
         db::UserDao userDao;
         db::FaceFeatureDao featureDao;
