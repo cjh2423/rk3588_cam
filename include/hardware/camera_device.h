@@ -41,6 +41,10 @@ private:
     // 核心精华：智能指针指向的 Mat 对象
     // 使用 shared_ptr 是为了方便在两个线程间安全地共享同一个 Mat 的所有权
     std::shared_ptr<cv::Mat> m_latest_frame;
+
+    // 帧追踪：用于判断是否为新帧
+    uint64_t m_frame_count{0};    // 后台线程累计抓取到的总帧数
+    uint64_t m_last_read_id{0};   // 记录上一次读取时的帧 ID
 };
 
 #endif // CAMERA_DEVICE_H

@@ -50,6 +50,7 @@ void CameraDevice::capture_thread_work() {
                 // 加锁：确保在替换 m_latest_frame 时，主线程没有正在读取它
                 std::lock_guard<std::mutex> lock(m_mutex);
                 m_latest_frame = new_ptr; // 原子替换：旧帧指针会被释放，新帧上位
+                m_frame_count++;          // 计数器 +1，标记这是一张新图
             }
             // 此时，如果主线程处理得慢，旧帧会直接在内存里销毁，永远保持“最新一帧”
         }
@@ -63,14 +64,15 @@ void CameraDevice::capture_thread_work() {
 bool CameraDevice::read(cv::Mat &frame) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    // 如果内存中有最新帧
-    if (m_latest_frame && !m_latest_frame->empty()) {
+    // 如果内存中有最新帧，且该帧的 ID 比上一次读取的 ID 大
+    if (m_latest_frame && !m_latest_frame->empty() && m_frame_count > m_last_read_id) {
         // 【核心精华】：OpenCV Mat 的赋值是“浅拷贝”
         // 它只是把指针指过去，底层图像数据不进行 memcpy，因此极快（微秒级）
         frame = *m_latest_frame;
+        m_last_read_id = m_frame_count; // 更新已读 ID，防止下一轮重复读取
         return true;
     }
-    return false; // 如果采集线程还没抓到第一张图，直接返回 false
+    return false; // 如果是旧帧，或者是空帧，都返回 false
 }
 
 void CameraDevice::release() {

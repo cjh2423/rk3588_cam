@@ -30,6 +30,7 @@
 #include "service/feature_library.h"
 #include "service/attendance_service.h"
 #include "database/user_dao.h"
+#include <chrono>
 
 InferenceThread::InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor)
     : model_manager_(model_manager)
@@ -99,6 +100,8 @@ void InferenceThread::thread_loop() {
             task = task_queue_.front();
             task_queue_.pop();
         }
+
+        auto t0 = std::chrono::steady_clock::now();
 
         // --- 1. YOLOv8-face 检测 ---
         detect_result_group_t detect_result;
@@ -223,7 +226,9 @@ void InferenceThread::thread_loop() {
 
         // 性能监控
         if (monitor_) {
-            // monitor_->markInference(); 
+             auto t1 = std::chrono::steady_clock::now();
+             double ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+             monitor_->markInference(ms);
         }
     }
 }

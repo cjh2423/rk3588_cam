@@ -45,7 +45,11 @@ void CameraView::updateFrame(const QImage &frame) {
         m_imageLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 
-void CameraView::updateStats(float fps, double /*unused*/) {
-    // 只更新 FPS 文字
-    m_statsLabel->setText(QString("画面帧率: %1 FPS").arg(static_cast<double>(fps), 0, 'f', 1));
+void CameraView::updateStats(float fps, double /*unused*/, float inferFps, double latency) {
+    // 更新 FPS 和 NPU 性能文字
+    QString text = QString("Camera: %1 FPS\nNPU: %2 FPS (%3 ms)")
+                       .arg(static_cast<double>(fps), 0, 'f', 1)
+                       .arg(static_cast<double>(inferFps), 0, 'f', 1)
+                       .arg(static_cast<double>(latency), 0, 'f', 1);
+    m_statsLabel->setText(text);
 }

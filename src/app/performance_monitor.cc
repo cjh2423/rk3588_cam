@@ -28,6 +28,15 @@ void PerformanceMonitor::markFrame() {
     m_frameCount.fetch_add(1, std::memory_order_relaxed);
 }
 
+void PerformanceMonitor::markInference(double latencyMs) {
+    m_inferCount.fetch_add(1, std::memory_order_relaxed);
+    
+    // 累加耗时 (简单自旋锁或直接原子加，这里用原子加)
+    // std::atomic<double> 不支持 fetch_add，使用 CAS 循环
+    double current = m_totalLatency.load();
+    while (!m_totalLatency.compare_exchange_weak(current, current + latencyMs));
+}
+
 void PerformanceMonitor::stop() {
     m_running = false;
     wait();
@@ -39,12 +48,23 @@ void PerformanceMonitor::run() {
 
         float elapsed = m_fpsTimer.restart() / 1000.0f;
         
-        // 获取当前计数值并清零，原子交换
-        int currentCount = m_frameCount.exchange(0);
-        
-        float fps = (elapsed > 0) ? (static_cast<float>(currentCount) / elapsed) : 0.0f;
+        // 1. 计算 Camera FPS
+        int camCount = m_frameCount.exchange(0);
+        float fps = (elapsed > 0) ? (static_cast<float>(camCount) / elapsed) : 0.0f;
 
-        // 发送信号给 UI (CPU 传 0 即可)
-        emit updateStatistics(fps, 0.0);
+        // 2. 计算 Inference FPS & Latency
+        int inferCount = m_inferCount.exchange(0);
+        double totalLat = 0.0;
+        
+        // 原子读取并清零耗时
+        double currentLat = m_totalLatency.load();
+        while (!m_totalLatency.compare_exchange_weak(currentLat, 0.0));
+        totalLat = currentLat;
+
+        float inferFps = (elapsed > 0) ? (static_cast<float>(inferCount) / elapsed) : 0.0f;
+        double avgLatency = (inferCount > 0) ? (totalLat / inferCount) : 0.0;
+
+        // 发送信号给 UI
+        emit updateStatistics(fps, 0.0, inferFps, avgLatency);
     }
 }
