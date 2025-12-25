@@ -23,6 +23,8 @@ bool CameraDevice::open(int index, int width, int height) {
     m_cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
     m_cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
     m_cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
+    // 自动曝光
+    m_cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 3); // 3 表示开启自动曝光
     m_cap.set(cv::CAP_PROP_FPS, 30); // 告诉硬件尽量以 30 帧运行
 
     if (m_cap.isOpened()) {
