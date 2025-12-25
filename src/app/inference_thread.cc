@@ -6,8 +6,12 @@
  * 2. NPU 推理：专注于执行 YOLOv8-face 模型，不进行后处理。
  * 3. 任务中转：将 NPU 输出的原始数据推送到 PostProcessThread。
  */
-
 #include "app/inference_thread.h"
+#include <iostream>
+#include <chrono>
+#include "config.h" // 新增
+
+InferenceThread::InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor, PostProcessThread* post_thread)
     : model_manager_(model_manager)
     , monitor_(monitor)
     , post_thread_(post_thread)
