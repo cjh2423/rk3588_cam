@@ -1,3 +1,8 @@
+/**
+ * @file cameraview.cpp
+ * @brief 摄像头预览窗口实现
+ */
+
 #include "cameraview.h"
 
 CameraView::CameraView(QWidget *parent) : QWidget(parent) {
@@ -45,11 +50,13 @@ void CameraView::updateFrame(const QImage &frame) {
         m_imageLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 
-void CameraView::updateStats(float fps, double /*unused*/, float inferFps, double latency) {
+void CameraView::updateStats(float fps, double /*unused*/, float inferFps, double latency, float postFps, double postLatency) {
     // 更新 FPS 和 NPU 性能文字
-    QString text = QString("Camera: %1 FPS\nNPU: %2 FPS (%3 ms)")
+    QString text = QString("Cam: %1 FPS\nNPU: %2 FPS (%3 ms)\nPost: %4 FPS (%5 ms)")
                        .arg(static_cast<double>(fps), 0, 'f', 1)
                        .arg(static_cast<double>(inferFps), 0, 'f', 1)
-                       .arg(static_cast<double>(latency), 0, 'f', 1);
+                       .arg(static_cast<double>(latency), 0, 'f', 1)
+                       .arg(static_cast<double>(postFps), 0, 'f', 1)
+                       .arg(static_cast<double>(postLatency), 0, 'f', 1);
     m_statsLabel->setText(text);
 }

@@ -1,3 +1,11 @@
+/**
+ * @file camera_device.cpp
+ * @brief 异步摄像头驱动实现
+ * @details 采用双缓冲区机制：
+ * 1. 后台线程死循环抓取 V4L2 图像 ID。
+ * 2. 增加帧追踪 ID 机制，确保 read() 只在有新硬件帧时返回 true，防止重复处理。
+ */
+
 #include "hardware/camera_device.h"
 
 CameraDevice::CameraDevice() {}

@@ -1,3 +1,9 @@
+/**
+ * @file app_controller.h
+ * @brief 应用控制器定义
+ * @details 作为整个系统的“大脑”，负责管理所有工作线程的生命周期和数据流转。
+ */
+
 #ifndef APP_CONTROLLER_H
 #define APP_CONTROLLER_H
 
@@ -18,6 +24,7 @@
 class PreprocessingThread;          // 预处理线程
 class PerformanceMonitor;           // 性能监控线程
 class InferenceThread;              // 推理线程 (新增)
+class PostProcessThread;            // 后处理线程 (新增)
 class ModelManager;                 // 模型管理 (新增)
 class CameraView;
 
@@ -70,6 +77,7 @@ private:
     // APP
     PreprocessingThread *m_preThread; // 预处理线程
     InferenceThread *m_inferenceThread; // 推理线程 (新增)
+    PostProcessThread *m_postThread;    // 后处理线程 (新增)
     ModelManager *m_modelManager;       // 模型管理 (新增)
     
     // 状态

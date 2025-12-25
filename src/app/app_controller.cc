@@ -3,17 +3,18 @@
  * @brief 应用控制器 (The Engine)
  * @details
  * 职责：
- * 1. 核心调度器：作为 Qt 主线程与后台工作线程（采集、推理）之间的桥梁。
- * 2. 生命周期管理：负责初始化 ModelManager、InferenceThread、PreprocessingThread 和 PerformanceMonitor。
+ * 1. 核心调度器：作为 Qt 主线程与后台工作线程（采集、推理、后处理）之间的桥梁。
+ * 2. 生命周期管理：负责初始化 ModelManager、InferenceThread、PostProcessThread、PreprocessingThread 和 PerformanceMonitor。
  * 3. 数据流转：
  *    - 从 PreprocessingThread 获取 RGA 处理后的图像。
- *    - 将图像推送到 InferenceThread 进行异步 AI 推理。
- *    - 从 InferenceThread 获取推理结果（含画框图）。
+ *    - 将图像推送到 InferenceThread 进行异步 NPU 推理。
+ *    - InferenceThread 将推理输出传递给 PostProcessThread。
+ *    - 从 PostProcessThread 获取最终识别结果。
  *    - 将最终结果转换为 QImage 并推送到 UI 显示。
  * 4. 模式切换：通过 PROJECT_MODE 宏控制是纯相机预览模式还是 AI 智能模式。
  * 
  * 核心机制：
- * - 生产者-消费者模型：通过非阻塞队列传递图像任务。
+ * - 生产者-消费者流水线：通过多级非阻塞队列实现全链路并行处理。
  * - 零拷贝：在 UI 渲染时尽量复用 cv::Mat 内存，避免不必要的 memcpy。
  */
 
@@ -29,6 +30,7 @@
 #include "database/user_dao.h"
 #include "database/face_feature_dao.h"
 #include "service/feature_library.h"
+#include "app/postprocess_thread.h" // 新增
 
 AppController::AppController(CameraView *view, QObject *parent) 
     : QObject(parent), m_view(view) {
@@ -39,8 +41,11 @@ AppController::AppController(CameraView *view, QObject *parent)
     // 初始化模型管理器 (但不加载模型，start时加载)
     m_modelManager = new ModelManager();
 
-    // 初始化推理线程
-    m_inferenceThread = new InferenceThread(m_modelManager, m_monitor);
+    // 初始化后处理线程
+    m_postThread = new PostProcessThread(m_modelManager, m_monitor);
+
+    // 初始化推理线程 (传入后处理线程指针)
+    m_inferenceThread = new InferenceThread(m_modelManager, m_monitor, m_postThread);
 
     // 清空结果缓存
     memset(&m_latestResult, 0, sizeof(m_latestResult));
@@ -85,6 +90,12 @@ AppController::~AppController() {
     if (m_inferenceThread) {
         m_inferenceThread->stop();
         delete m_inferenceThread;
+    }
+    
+    // 停止后处理线程
+    if (m_postThread) {
+        m_postThread->stop();
+        delete m_postThread;
     }
     
     // 释放模型
@@ -146,6 +157,9 @@ bool AppController::start(int camIndex, int w, int h,
     // 1. 启动推理线程
     m_inferenceThread->start();
 
+    // 1.5 启动后处理线程
+    m_postThread->start();
+
     // 2. 启动预处理线程 (内部开启摄像头)
     // 注意：内部会调用 m_camera.open()
     m_preThread->start(camIndex); 
@@ -160,8 +174,8 @@ bool AppController::start(int camIndex, int w, int h,
 }
 
 bool AppController::getLatestFeature(std::vector<float>& feature) {
-    if (!m_inferenceThread) return false;
-    return m_inferenceThread->get_latest_feature(feature);
+    if (!m_postThread) return false;
+    return m_postThread->get_latest_feature(feature);
 }
 
 int64_t AppController::registerUser(const std::string& name, const std::string& dept, const std::vector<float>& feature) {
@@ -255,9 +269,9 @@ void AppController::onFrameTick() {
 
     // 3. 检查是否有新的推理结果
     // 无论是否有新帧，都可以去查一下结果，因为推理可能比采集慢
-    if (m_inferenceThread) {
+    if (m_postThread) {
         detect_result_group_t newResult;
-        if (m_inferenceThread->get_latest_result(newResult)) {
+        if (m_postThread->get_latest_result(newResult)) {
             m_latestResult = newResult; // 原子更新结果
         }
     }

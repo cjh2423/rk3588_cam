@@ -1,3 +1,9 @@
+/**
+ * @file inference_thread.h
+ * @brief 推理线程定义
+ * @details 负责 YOLOv8 模型的 NPU 推理调度。
+ */
+
 #ifndef INFERENCE_THREAD_H
 #define INFERENCE_THREAD_H
 
@@ -7,48 +13,43 @@
 #include <condition_variable>
 #include <opencv2/core/core.hpp>
 #include "core/model_manager.h"
-#include "app/preprocessing_thread.h" // 复用 PreprocessTask
 #include "app/performance_monitor.h"
+#include "app/preprocessing_thread.h" // for PreprocessTask
+#include "app/postprocess_thread.h" // for PostProcessTask
 
 class InferenceThread {
 public:
-    InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor = nullptr);
+    InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor, PostProcessThread* post_thread);
     ~InferenceThread();
 
-    // 启动线程
     void start();
-    
-    // 停止线程
     void stop();
 
-    // 推送任务 (由 PreprocessingThread 或 AppController 调用)
     void push_task(const PreprocessTask& task);
 
-    // 获取最新检测结果
-    bool get_latest_result(detect_result_group_t& result);
-
-    // 获取当前人脸特征 (用于注册)
-    // 只有当画面中仅有一个人脸时有效
-    bool get_latest_feature(std::vector<float>& feature);
+    // 结果获取现在移交给了 PostProcessThread，这里不再提供
+    // bool get_latest_result(detect_result_group_t& result);
+    // bool get_latest_feature(std::vector<float>& feature);
 
 private:
     void thread_loop();
 
-private:
     ModelManager* model_manager_;
     PerformanceMonitor* monitor_;
-    
+    PostProcessThread* post_thread_; // 新增
+
     std::thread thread_;
     std::atomic<bool> running_;
     
+    std::queue<PreprocessTask> task_queue_;
     std::mutex queue_mutex_;
     std::condition_variable queue_cv_;
-    std::queue<PreprocessTask> task_queue_;
     
-    std::mutex result_mutex_;
-    detect_result_group_t latest_result_;
-    std::vector<float> latest_feature_; // 缓存的特征向量
-    bool has_new_result_;
+    // 移除结果存储
+    // detect_result_group_t latest_result_;
+    // std::vector<float> latest_feature_;
+    // bool has_new_result_;
+    // std::mutex result_mutex_;
 };
 
 #endif // INFERENCE_THREAD_H
