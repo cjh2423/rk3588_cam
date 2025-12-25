@@ -6,45 +6,55 @@
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <linux/videodev2.h>
 
 /**
- * @brief 异步摄像头管理类
- * 解决了 OpenCV 原生 read() 带来的阻塞和画面堆积问题
+ * @brief V4L2 缓冲区简单的封装结构体
+ */
+struct Buffer {
+    void *start;
+    size_t length;
+};
+
+/**
+ * @brief 异步摄像头管理类 (V4L2 高性能版)
+ * 采用 Linux 原生 V4L2 接口 + mmap 零拷贝 + 独立线程解码
+ * 实现了与参考代码一致的 30fps 性能
  */
 class CameraDevice {
 public:
     CameraDevice();
     ~CameraDevice();
 
-    // 开启摄像头，可指定分辨率，默认 640x480
+    // 开启摄像头，可指定分辨率
     bool open(int index, int width = 640, int height = 480);
     
-    // 从共享内存中获取“当前最新”的一帧，不再从硬件实时等待
+    // 从共享内存中获取“当前最新”的一帧
     bool read(cv::Mat &frame); 
     
     // 安全关闭硬件并销毁采集线程
     void release();
 
 private:
-    // 后台采集线程的函数体：在这个线程里死循环抓取硬件数据
+    // 后台采集线程的函数体
     void capture_thread_work(); 
+    
+    // 清理 V4L2 缓冲区
+    void cleanup_buffers();
 
-    cv::VideoCapture m_cap;      // OpenCV 硬件操作句柄
-    std::thread m_thread;        // 管理后台线程的对象
+    // V4L2 成员变量
+    int m_fd = -1;                // 摄像头设备文件描述符
+    Buffer* m_buffers = nullptr;  // 用户空间映射的缓冲区数组
+    unsigned int m_n_buffers = 0; // 实际申请到的缓冲区数量
     
-    // 原子布尔变量：用于线程间的状态控制，比普通的 bool 更安全
-    std::atomic<bool> m_running{false}; 
-    
-    // 互斥锁：防止主线程读取和后台线程写入同一块内存时发生冲突
-    std::mutex m_mutex;
-    
-    // 核心精华：智能指针指向的 Mat 对象
-    // 使用 shared_ptr 是为了方便在两个线程间安全地共享同一个 Mat 的所有权
-    std::shared_ptr<cv::Mat> m_latest_frame;
+    std::thread m_thread;         // 管理后台线程的对象
+    std::atomic<bool> m_running{false}; // 线程运行标志
+    std::mutex m_mutex;           // 互斥锁
+    std::shared_ptr<cv::Mat> m_latest_frame; // 当前最新帧
 
-    // 帧追踪：用于判断是否为新帧
-    uint64_t m_frame_count{0};    // 后台线程累计抓取到的总帧数
-    uint64_t m_last_read_id{0};   // 记录上一次读取时的帧 ID
+    // 帧追踪
+    uint64_t m_frame_count{0};    
+    uint64_t m_last_read_id{0};   
 };
 
 #endif // CAMERA_DEVICE_H

@@ -1,100 +1,225 @@
 /**
  * @file camera_device.cpp
- * @brief 异步摄像头驱动实现
- * @details 采用双缓冲区机制：
- * 1. 后台线程死循环抓取 V4L2 图像 ID。
- * 2. 增加帧追踪 ID 机制，确保 read() 只在有新硬件帧时返回 true，防止重复处理。
+ * @brief 异步摄像头驱动实现 (V4L2 高性能版)
+ * @details 
+ * 参考 https://github.com/ccl-123/RK3588-NPU 实现
+ * 使用 V4L2 直接控制摄像头，启用 MJPEG 格式以获得 30fps 性能。
  */
 
 #include "hardware/camera_device.h"
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <iostream>
+#include <cstring> // for memset
+
+#define REQ_COUNT 4
 
 CameraDevice::CameraDevice() {}
 
 CameraDevice::~CameraDevice() {
-    release(); // 确保对象销毁时，后台线程能被正确关闭
+    release(); 
+}
+
+void CameraDevice::cleanup_buffers() {
+    if (m_buffers != nullptr) {
+        for (unsigned int i = 0; i < m_n_buffers; ++i) {
+            if (m_buffers[i].start != nullptr && m_buffers[i].start != MAP_FAILED) {
+                munmap(m_buffers[i].start, m_buffers[i].length);
+                m_buffers[i].start = nullptr;
+            }
+        }
+        delete[] m_buffers;
+        m_buffers = nullptr;
+    }
+    m_n_buffers = 0;
 }
 
 bool CameraDevice::open(int index, int width, int height) {
-    // 1. 打开设备，CAP_V4L2 是 Linux 下操作摄像头的原生后端，速度最快
-    if (!m_cap.open(index, cv::CAP_V4L2)) return false;
-
-    // 2. 硬件参数配置
-    // MJPEG 是一种压缩格式，能显著降低 USB 总线的带宽占用，提升 1080P 等高分率下的帧率
-    m_cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    m_cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
-    m_cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
-    // 自动曝光
-    m_cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 3); // 3 表示开启自动曝光
-    m_cap.set(cv::CAP_PROP_FPS, 30); // 告诉硬件尽量以 30 帧运行
-
-    if (m_cap.isOpened()) {
-        m_running = true;
-        // 3. 【核心精华】：启动后台采集线程
-        // 使用 std::thread 开启一个新线程运行 capture_thread_work
-        m_thread = std::thread(&CameraDevice::capture_thread_work, this);
-        
-        printf("[Camera] 后台采集线程已启动，配置: %dx%d\n", width, height);
+    if (m_fd >= 0) {
+        std::cerr << "[Camera] Device already opened." << std::endl;
+        return false;
     }
-    return m_cap.isOpened();
+
+    // 1. 打开设备文件
+    std::string device_path = "/dev/video" + std::to_string(index);
+    m_fd = ::open(device_path.c_str(), O_RDWR); // ::open 防止与 open 成员函数混淆
+    if (m_fd < 0) {
+        perror(("[Camera] Failed to open " + device_path).c_str());
+        return false;
+    }
+
+    // 2. 查询能力
+    v4l2_capability cap;
+    if (ioctl(m_fd, VIDIOC_QUERYCAP, &cap) == -1) {
+        perror("[Camera] VIDIOC_QUERYCAP");
+        ::close(m_fd); m_fd = -1;
+        return false;
+    }
+
+    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+        std::cerr << "[Camera] Device does not support video capture" << std::endl;
+        ::close(m_fd); m_fd = -1;
+        return false;
+    }
+
+    // 3. 配置格式：强制 MJPEG 以支持高帧率 (30fps)
+    v4l2_format fmt = {};
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    fmt.fmt.pix.width = width;
+    fmt.fmt.pix.height = height;
+    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG; // 关键配置
+    fmt.fmt.pix.field = V4L2_FIELD_NONE;
+
+    if (ioctl(m_fd, VIDIOC_S_FMT, &fmt) == -1) {
+        perror("[Camera] VIDIOC_S_FMT");
+        ::close(m_fd); m_fd = -1;
+        return false;
+    }
+    
+    // 打印实际协商的分辨率
+    std::cout << "[Camera] V4L2 initialized: " << fmt.fmt.pix.width << "x" << fmt.fmt.pix.height 
+              << " (MJPEG)" << std::endl;
+
+    // 4. 申请内核缓冲区
+    v4l2_requestbuffers req = {};
+    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.memory = V4L2_MEMORY_MMAP;
+    req.count = REQ_COUNT;
+
+    if (ioctl(m_fd, VIDIOC_REQBUFS, &req) == -1) {
+        perror("[Camera] VIDIOC_REQBUFS");
+        ::close(m_fd); m_fd = -1;
+        return false;
+    }
+
+    // 5. 内存映射 (mmap)
+    m_buffers = new Buffer[req.count];
+    m_n_buffers = req.count;
+    memset(m_buffers, 0, sizeof(Buffer) * req.count);
+
+    for (unsigned int i = 0; i < req.count; ++i) {
+        v4l2_buffer buf = {};
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index = i;
+
+        if (ioctl(m_fd, VIDIOC_QUERYBUF, &buf) == -1) {
+            perror("[Camera] VIDIOC_QUERYBUF");
+            cleanup_buffers();
+            ::close(m_fd); m_fd = -1;
+            return false;
+        }
+
+        m_buffers[i].length = buf.length;
+        m_buffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, m_fd, buf.m.offset);
+
+        if (m_buffers[i].start == MAP_FAILED) {
+            perror("[Camera] mmap failed");
+            cleanup_buffers();
+            ::close(m_fd); m_fd = -1;
+            return false;
+        }
+
+        // 入队
+        if (ioctl(m_fd, VIDIOC_QBUF, &buf) == -1) {
+            perror("[Camera] VIDIOC_QBUF");
+            cleanup_buffers();
+            ::close(m_fd); m_fd = -1;
+            return false;
+        }
+    }
+
+    // 6. 开启视频流
+    v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(m_fd, VIDIOC_STREAMON, &type) == -1) {
+        perror("[Camera] VIDIOC_STREAMON");
+        cleanup_buffers();
+        ::close(m_fd); m_fd = -1;
+        return false;
+    }
+
+    // 7. 启动采集线程
+    m_running = true;
+    m_thread = std::thread(&CameraDevice::capture_thread_work, this);
+
+    return true;
 }
 
-/**
- * 后台线程的工作内容：
- * 这个函数一直在跑，它唯一的任务就是把硬件缓冲区里的数据“掏出来”放到内存里。
- */
 void CameraDevice::capture_thread_work() {
+    v4l2_buffer buf = {};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+
     while (m_running) {
-        cv::Mat tmp_frame;
-        // m_cap.read 会阻塞当前线程直到硬件产生新的一帧
-        // 因为这是后台线程，所以它“等得起”，主线程不会卡顿
-        if (!m_cap.read(tmp_frame)) {
+        // 出队 (DQBUF)
+        if (ioctl(m_fd, VIDIOC_DQBUF, &buf) == -1) {
+            if (errno == EAGAIN) {
+                usleep(1000);
+                continue;
+            }
+            perror("[Camera] VIDIOC_DQBUF failed");
+            // 错误处理：简单休眠重试，或者退出
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (!m_running) break;
             continue;
         }
 
-        if (!tmp_frame.empty()) {
-            // 【核心精华】：零拷贝封装
-            // std::move 把 tmp_frame 的图像数据直接“移交给”智能指针，不产生内存复制
-            auto new_ptr = std::make_shared<cv::Mat>(std::move(tmp_frame));
-            
+        // 解码 (MJPEG -> BGR)
+        // 这里的 raw_data 只是构建了一个 OpenCV 矩阵头指向 mmap 的内存，没有数据拷贝
+        cv::Mat raw_data(1, buf.bytesused, CV_8UC1, m_buffers[buf.index].start);
+        cv::Mat decoded_frame = cv::imdecode(raw_data, cv::IMREAD_COLOR);
+
+        if (!decoded_frame.empty()) {
+            auto new_ptr = std::make_shared<cv::Mat>(std::move(decoded_frame));
             {
-                // 加锁：确保在替换 m_latest_frame 时，主线程没有正在读取它
                 std::lock_guard<std::mutex> lock(m_mutex);
-                m_latest_frame = new_ptr; // 原子替换：旧帧指针会被释放，新帧上位
-                m_frame_count++;          // 计数器 +1，标记这是一张新图
+                m_latest_frame = new_ptr; 
+                m_frame_count++;          
             }
-            // 此时，如果主线程处理得慢，旧帧会直接在内存里销毁，永远保持“最新一帧”
+        }
+
+        // 重新入队 (QBUF)
+        if (ioctl(m_fd, VIDIOC_QBUF, &buf) == -1) {
+            perror("[Camera] VIDIOC_QBUF re-queue failed");
         }
     }
 }
 
-/**
- * 主线程调用的 read：
- * 它的任务不是去等硬件，而是去“瞅一眼”内存里的 m_latest_frame 准备好了没。
- */
 bool CameraDevice::read(cv::Mat &frame) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
     // 如果内存中有最新帧，且该帧的 ID 比上一次读取的 ID 大
     if (m_latest_frame && !m_latest_frame->empty() && m_frame_count > m_last_read_id) {
-        // 【核心精华】：OpenCV Mat 的赋值是“浅拷贝”
-        // 它只是把指针指过去，底层图像数据不进行 memcpy，因此极快（微秒级）
+        // 浅拷贝
         frame = *m_latest_frame;
-        m_last_read_id = m_frame_count; // 更新已读 ID，防止下一轮重复读取
+        m_last_read_id = m_frame_count; 
         return true;
     }
-    return false; // 如果是旧帧，或者是空帧，都返回 false
+    return false; 
 }
 
 void CameraDevice::release() {
-    m_running = false; // 先通知线程停止循环
+    m_running = false; 
     
-    // 如果线程还在运行，则等待它运行完最后一步
     if (m_thread.joinable()) {
         m_thread.join(); 
     }
     
-    // 释放 OpenCV 硬件资源
-    if (m_cap.isOpened()) {
-        m_cap.release();
+    if (m_fd >= 0) {
+        // 停止视频流
+        v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        ioctl(m_fd, VIDIOC_STREAMOFF, &type);
+        
+        cleanup_buffers();
+        ::close(m_fd);
+        m_fd = -1;
+    }
+    
+    // 清空引用
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_latest_frame.reset();
     }
 }
