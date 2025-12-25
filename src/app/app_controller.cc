@@ -240,6 +240,12 @@ void AppController::onFrameTick() {
         if (m_monitor) {
             m_monitor->markFrame();
         }
+
+        // 即使在预览模式，也调用 drawResult 来绘制时间叠加层
+        detect_result_group_t empty_result;
+        memset(&empty_result, 0, sizeof(empty_result));
+        drawResult(frame, empty_result);
+
         // 转换并镜像
         QImage qimg = cvMatToQImage(frame);
         // 显示
@@ -304,6 +310,28 @@ void AppController::onFrameTick() {
 }
 
 void AppController::drawResult(cv::Mat& frame, const detect_result_group_t& result) {
+    // --- 新增：绘制实时时间 ---
+    char time_str[64];
+    time_t now = time(nullptr);
+    struct tm *tstruct = localtime(&now);
+    // 格式化时间：年-月-日 时:分:秒
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tstruct);
+    
+    // 设置时间显示的参数
+    int font_face = cv::FONT_HERSHEY_SIMPLEX;
+    double font_scale = 0.8;
+    int thickness = 2;
+    int baseline = 0;
+    cv::Size text_size = cv::getTextSize(time_str, font_face, font_scale, thickness, &baseline);
+    
+    // 将时间画在右上角，留出 20 像素的边距
+    cv::Point origin(frame.cols - text_size.width - 20, text_size.height + 20);
+    
+    // 为了让时间更清晰，先画一个半透明背景或黑色描边（这里采用黑色阴影效果）
+    cv::putText(frame, time_str, origin + cv::Point(1, 1), font_face, font_scale, cv::Scalar(0, 0, 0), thickness); // 阴影
+    cv::putText(frame, time_str, origin, font_face, font_scale, cv::Scalar(0, 255, 255), thickness);             // 黄色文字
+
+    // --- 原有的人脸识别结果绘制逻辑 ---
     for (int i = 0; i < result.count; i++) {
         const detect_result_t& face = result.results[i];
         
