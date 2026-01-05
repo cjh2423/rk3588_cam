@@ -31,6 +31,7 @@ private:
     QLabel *m_statsLabel;
     
     QPushButton *m_btnManage;   // 用户管理
+    QPushButton *m_btnAttendance; // 考勤管理
     QPushButton *m_btnRegister; // 人脸注册
     QPushButton *m_btnSettings; // 设置
     QPushButton *m_closeButton;
@@ -41,6 +42,13 @@ signals:
 
 public slots:
     void openSettings();
+    void openAttendance();
+    
+    // 显示考勤成功提示
+    void showAttendanceToast(const QString& name, const QString& time, int type, int status);
+
+private:
+    QLabel *m_toastLabel; // 提示标签
 };
 
 #endif

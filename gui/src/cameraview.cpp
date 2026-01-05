@@ -6,6 +6,8 @@
 #include "cameraview.h"
 #include "config/config_manager.h" // 新增
 #include "settings_dialog.h" // 新增
+#include "attendance_manager_widget.h" // 新增
+#include <QTimer> // Added
 
 CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     auto *layout = new QVBoxLayout(this);
@@ -14,6 +16,12 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     m_imageLabel->setAlignment(Qt::AlignCenter);
     m_imageLabel->setStyleSheet("background-color: black; border: 2px solid #333;");
     m_imageLabel->setMinimumSize(640, 480);
+    
+    // 考勤成功提示 (Overlay)
+    m_toastLabel = new QLabel(m_imageLabel);
+    m_toastLabel->setStyleSheet("background-color: rgba(0, 180, 0, 180); color: white; font-size: 24px; font-weight: bold; padding: 15px; border-radius: 10px;");
+    m_toastLabel->setAlignment(Qt::AlignCenter);
+    m_toastLabel->hide();
 
     // 性能标签：只显示 FPS
     m_statsLabel = new QLabel("FPS: 0.0", this);
@@ -26,16 +34,19 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     // 功能按钮栏
     auto *btnLayout = new QHBoxLayout();
     m_btnManage = new QPushButton("用户管理", this);
+    m_btnAttendance = new QPushButton("考勤记录", this);
     m_btnRegister = new QPushButton("人脸注册", this);
     m_btnSettings = new QPushButton("系统设置", this);
     m_closeButton = new QPushButton("退出", this);
     
     m_btnManage->setFixedHeight(40);
+    m_btnAttendance->setFixedHeight(40);
     m_btnRegister->setFixedHeight(40);
     m_btnSettings->setFixedHeight(40);
     m_closeButton->setFixedHeight(40);
     
     btnLayout->addWidget(m_btnManage);
+    btnLayout->addWidget(m_btnAttendance);
     btnLayout->addWidget(m_btnRegister);
     btnLayout->addWidget(m_btnSettings);
     btnLayout->addWidget(m_closeButton);
@@ -45,6 +56,7 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     layout->addLayout(btnLayout);
 
     connect(m_btnManage, &QPushButton::clicked, this, &CameraView::openUserManager);
+    connect(m_btnAttendance, &QPushButton::clicked, this, &CameraView::openAttendance);
     connect(m_btnRegister, &QPushButton::clicked, this, &CameraView::openRegistration);
     connect(m_btnSettings, &QPushButton::clicked, this, &CameraView::openSettings);
     connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
@@ -76,4 +88,30 @@ void CameraView::updateStats(float fps, double /*unused*/, float inferFps, doubl
 void CameraView::openSettings() {
     SettingsDialog dlg(this);
     dlg.exec();
+}
+
+void CameraView::openAttendance() {
+    AttendanceManagerWidget dlg(this);
+    dlg.exec();
+}
+
+void CameraView::showAttendanceToast(const QString& name, const QString& time, int type, int status) {
+    QString typeStr = (type == 1) ? "签到" : "签退";
+    QString statusStr = "";
+    if (status == 1) statusStr = "正常";
+    else if (status == 2) statusStr = "迟到";
+    else if (status == 3) statusStr = "早退";
+    
+    QString fullText = QString("%1 %2 (%3)\n%4").arg(name, typeStr, statusStr, time);
+    m_toastLabel->setText(fullText);
+    m_toastLabel->adjustSize();
+    // 水平居中，垂直靠上
+    int x = (m_imageLabel->width() - m_toastLabel->width()) / 2;
+    int y = 40;
+    m_toastLabel->move(x, y);
+    m_toastLabel->show();
+    m_toastLabel->raise();
+    
+    // 2秒后自动隐藏
+    QTimer::singleShot(2000, m_toastLabel, &QLabel::hide);
 }

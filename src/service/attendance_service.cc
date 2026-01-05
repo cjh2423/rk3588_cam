@@ -15,7 +15,7 @@ namespace service {
 
 AttendanceService::AttendanceService() {}
 
-int64_t AttendanceService::record_attendance(int64_t user_id, float similarity) {
+std::optional<db::AttendanceRecord> AttendanceService::record_attendance(int64_t user_id, float similarity) {
     db::AttendanceDao attendance_dao;
     
     std::time_t now = std::time(nullptr);
@@ -61,10 +61,10 @@ int64_t AttendanceService::record_attendance(int64_t user_id, float similarity) 
         }
     } else {
         // 已有打卡 -> 签退 (或更新签退)
-        // 防抖：如果上一条记录在1分钟内，忽略
+        // 防抖：使用配置的间隔 (默认300秒)
         db::AttendanceRecord last = records.back();
-        if (now - last.check_time < 60) {
-            return -1; // 忽略频繁打卡
+        if (now - last.check_time < Config::Default::DUPLICATE_CHECK_INTERVAL) {
+            return std::nullopt; // 忽略频繁打卡
         }
         
         new_record.check_type = 2; // 签退
@@ -79,10 +79,12 @@ int64_t AttendanceService::record_attendance(int64_t user_id, float similarity) 
     
     int64_t id = attendance_dao.add_record(new_record);
     if (id != -1) {
+        new_record.record_id = id;
         std::cout << "User " << user_id << " attendance recorded: Type=" << new_record.check_type 
                   << ", Status=" << new_record.status << std::endl;
+        return new_record;
     }
-    return id;
+    return std::nullopt;
 }
 
 } // namespace service

@@ -18,6 +18,7 @@
 #include <vector>
 #include <atomic>
 #include <array>
+#include <chrono> // Added for steady_clock
 
 #include "core/model_manager.h"
 #include "app/performance_monitor.h"
@@ -30,6 +31,14 @@ struct PostProcessTask {
     std::array<std::vector<uint8_t>, YOLOV8_FACE_OUTPUT_NUM> output_buffers; // YOLO 输出张量
     int model_w;
     int model_h;
+};
+
+// 考勤事件 (用于 UI 通知)
+struct AttendanceEvent {
+    std::string name;
+    std::string time;
+    int type;   // 1=In, 2=Out
+    int status; // 1=Normal, 2=Late, 3=Early
 };
 
 class PostProcessThread {
@@ -46,6 +55,9 @@ public:
     // 获取最终结果 (供 UI 读取)
     bool get_latest_result(detect_result_group_t& result);
     bool get_latest_feature(std::vector<float>& feature);
+    
+    // 获取考勤事件 (非阻塞)
+    bool get_next_event(AttendanceEvent& event);
 
 private:
     void thread_loop();
@@ -66,6 +78,15 @@ private:
     std::vector<float> latest_feature_;
     bool has_new_result_;
     std::mutex result_mutex_;
+    
+    // 事件队列 (UI通知)
+    std::queue<AttendanceEvent> event_queue_;
+    std::mutex event_mutex_;
+    
+    // 确认逻辑状态
+    int64_t last_user_id_ = -1;
+    std::chrono::steady_clock::time_point confirm_start_time_;
+    bool is_confirming_ = false;
 };
 
 #endif // POSTPROCESS_THREAD_H

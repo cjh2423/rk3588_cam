@@ -280,6 +280,19 @@ void AppController::onFrameTick() {
         if (m_postThread->get_latest_result(newResult)) {
             m_latestResult = newResult; // 原子更新结果
         }
+        
+        // 检查考勤事件
+        AttendanceEvent evt;
+        while (m_postThread->get_next_event(evt)) {
+            if (m_view) {
+                m_view->showAttendanceToast(
+                    QString::fromStdString(evt.name), 
+                    QString::fromStdString(evt.time),
+                    evt.type,
+                    evt.status
+                );
+            }
+        }
     }
 
     // 4. 显示逻辑

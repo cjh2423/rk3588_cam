@@ -53,6 +53,14 @@ void PostProcessThread::push_task(const PostProcessTask& task) {
     queue_cv_.notify_one();
 }
 
+bool PostProcessThread::get_next_event(AttendanceEvent& event) {
+    std::lock_guard<std::mutex> lock(event_mutex_);
+    if (event_queue_.empty()) return false;
+    event = event_queue_.front();
+    event_queue_.pop();
+    return true;
+}
+
 bool PostProcessThread::get_latest_result(detect_result_group_t& result) {
     std::lock_guard<std::mutex> lock(result_mutex_);
     if (!has_new_result_) return false;
@@ -143,17 +151,67 @@ void PostProcessThread::thread_loop() {
                         // 使用配置管理器的动态阈值
                         int64_t user_id = service::FeatureLibrary::instance().search(feature, ConfigManager::instance().getRecognitionThreshold(), similarity);
                         
+                        // --- 确认逻辑 Start ---
                         if (user_id != -1) {
-                            db::UserDao userDao;
-                            auto user = userDao.get_user_by_id(user_id);
-                            if (user) {
-                                strncpy(face.name, user->user_name.c_str(), OBJ_NAME_MAX_SIZE - 1);
-                                service::AttendanceService attendanceService;
-                                attendanceService.record_attendance(user_id, similarity);
+                            if (last_user_id_ != user_id) {
+                                last_user_id_ = user_id;
+                                confirm_start_time_ = std::chrono::steady_clock::now();
+                                is_confirming_ = true;
+                            } else if (is_confirming_) {
+                                auto now = std::chrono::steady_clock::now();
+                                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - confirm_start_time_).count();
+                                
+                                if (duration >= Config::Default::USER_CONFIRM_DURATION_MS) {
+                                    // 达到确认时间
+                                    db::UserDao userDao;
+                                    auto user = userDao.get_user_by_id(user_id);
+                                    if (user) {
+                                        strncpy(face.name, user->user_name.c_str(), OBJ_NAME_MAX_SIZE - 1);
+                                        service::AttendanceService attendanceService;
+                                        auto record_opt = attendanceService.record_attendance(user_id, similarity);
+                                        
+                                        if (record_opt.has_value()) {
+                                            // 成功记录，通知 UI
+                                            AttendanceEvent evt;
+                                            evt.name = user->user_name;
+                                            time_t t = record_opt->check_time;
+                                            char t_str[32];
+                                            strftime(t_str, 32, "%H:%M:%S", localtime(&t));
+                                            evt.time = t_str;
+                                            
+                                            evt.type = record_opt->check_type; 
+                                            evt.status = record_opt->status;
+                                            
+                                            {
+                                                std::lock_guard<std::mutex> lk(event_mutex_);
+                                                event_queue_.push(evt);
+                                            }
+                                        }
+                                        // 标记为已完成本次确认，等待用户离开视野重置
+                                        is_confirming_ = false;
+                                    }
+                                }
                             }
+                            
+                            // 即使在确认中，如果已经拿到名字（例如 record_attendance 之后 face.name 被填了），也要显示
+                            // 但上面的逻辑只有在触发 record_attendance 时才填 name。
+                            // 实际上我们希望一直显示名字，只要 user_id 匹配。
+                            // 所以这里需要补一个逻辑：如果是 confirming 但还没触发，或者已经触发过了，都要显示名字。
+                            // 简单做法：每次都查 user_name (有性能损耗，但在 PostProcess 线程还好)
+                            // 或者优化：缓存当前 userName。
+                            if (user_id != -1) { // Redundant check but clear intent
+                                 db::UserDao userDao;
+                                 auto user = userDao.get_user_by_id(user_id);
+                                 if (user) strncpy(face.name, user->user_name.c_str(), OBJ_NAME_MAX_SIZE - 1);
+                            }
+
                         } else {
+                            // 无人脸或未知，重置
+                            last_user_id_ = -1;
+                            is_confirming_ = false;
                             strncpy(face.name, "Unknown", OBJ_NAME_MAX_SIZE - 1);
                         }
+                        // --- 确认逻辑 End ---
                         
                         facenet_output_release(
                             model_manager_->get_facenet_ctx(),
