@@ -6,6 +6,7 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QDebug>
+#include <QtConcurrent>         // 用于异步操作
 
 AttendanceManagerWidget::AttendanceManagerWidget(QWidget *parent) : QDialog(parent) {
     setWindowTitle("考勤管理");
@@ -52,12 +53,29 @@ AttendanceManagerWidget::AttendanceManagerWidget(QWidget *parent) : QDialog(pare
     connect(m_btnExport, &QPushButton::clicked, this, &AttendanceManagerWidget::exportRecords);
     connect(m_btnClose, &QPushButton::clicked, this, &QDialog::accept);
     
+    // Async Watcher 用于刷新列表
+    connect(&m_watcher, &QFutureWatcher<std::vector<db::AttendanceJoinedRecord>>::finished, 
+            this, &AttendanceManagerWidget::onRefreshFinished);
+    
     refreshList();
 }
 
 void AttendanceManagerWidget::refreshList() {
-    db::AttendanceDao dao;
-    auto records = dao.search_records_joined(m_searchEdit->text().toStdString());
+    m_btnRefresh->setEnabled(false);
+    m_table->setDisabled(true); // Prevent interaction while loading
+    
+    std::string keyword = m_searchEdit->text().toStdString();
+    // 异步查询数据库 : 直接把一个函数扔到后台线程去跑
+    QFuture<std::vector<db::AttendanceJoinedRecord>> future = QtConcurrent::run([keyword](){
+        db::AttendanceDao dao;
+        return dao.search_records_joined(keyword);
+    });
+    
+    m_watcher.setFuture(future);
+}
+
+void AttendanceManagerWidget::onRefreshFinished() {
+    auto records = m_watcher.result();
     
     m_table->setRowCount(0);
     for (const auto& r : records) {
@@ -89,6 +107,9 @@ void AttendanceManagerWidget::refreshList() {
         
         m_table->setItem(row, 6, new QTableWidgetItem(QString::number(r.similarity, 'f', 2)));
     }
+    
+    m_btnRefresh->setEnabled(true);
+    m_table->setDisabled(false);
 }
 
 void AttendanceManagerWidget::deleteSelectedRecord() {

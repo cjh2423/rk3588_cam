@@ -23,7 +23,7 @@ set(RGA_LIBS  "${SDK_3RDPARTY_DIR}/rga/lib/Linux/aarch64/librga.so")
 
 # 定位 Qt5 (使用 apt 安装在系统的路径)
 set(Qt5_DIR "/usr/lib/aarch64-linux-gnu/cmake/Qt5")
-find_package(Qt5 COMPONENTS Core Widgets Gui REQUIRED)
+find_package(Qt5 COMPONENTS Core Widgets Gui Concurrent REQUIRED)
 
 # 系统动态库列表 (不再依赖 3rdparty/opencv 的静态库)
 link_directories(/usr/lib/aarch64-linux-gnu)
@@ -73,6 +73,7 @@ target_link_libraries(${PROJECT_NAME}
     Qt5::Widgets 
     Qt5::Gui 
     Qt5::Core
+    Qt5::Concurrent
     ${SYSTEM_LIBS}
     ${RKNN_LIBS}
     ${RGA_LIBS}
