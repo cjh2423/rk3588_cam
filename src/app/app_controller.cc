@@ -20,7 +20,7 @@
 
 #include "app/app_controller.h"
 
-#include "config.h"            // 包含配置
+#include "config/config.h"            // 包含配置
 #include <QDebug>
 #include <QCoreApplication>
 #include <iostream>

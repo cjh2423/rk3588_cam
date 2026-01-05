@@ -34,10 +34,15 @@
 │   ├── database/       # 数据库访问对象 (DAO)
 │   ├── service/        # 业务服务（特征库、考勤服务）
 │   └── hardware/       # 硬件封装（CameraDevice）
+    └── config/         # 全局配置与管理
+        ├── config.h    # 静态配置常量
+        └── config_manager.h # 动态配置管理器
 ├── src/                # 源代码实现
+│   └── config/         # 配置实现
+│       └── config_manager.cc
 ├── build.sh            # 虚拟机交叉编译脚本
 ├── run.sh              # 开发板运行脚本
-└── include/config.h    # 全局配置（路径、阈值等）
+
 ```
 
 ## 快速开始 (部署)

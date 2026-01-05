@@ -32,11 +32,15 @@ private:
     
     QPushButton *m_btnManage;   // 用户管理
     QPushButton *m_btnRegister; // 人脸注册
+    QPushButton *m_btnSettings; // 设置
     QPushButton *m_closeButton;
     
 signals:
     void openUserManager();
     void openRegistration();
+
+public slots:
+    void openSettings();
 };
 
 #endif

@@ -5,12 +5,13 @@
 #include <QMessageBox>
 #include <cmath>
 #include <numeric>
-#include "config.h"
+#include "config/config.h"
+#include "config/config_manager.h" // 新增
 
 RegistrationDialog::RegistrationDialog(AppController* controller, QWidget *parent) 
     : QDialog(parent), m_controller(controller) {
     
-    m_maxSamples = Config::Default::REGISTRATION_SAMPLE_COUNT;
+    m_maxSamples = ConfigManager::instance().getRegistrationSampleCount();
 
     setWindowTitle("人脸注册 (手动采集)");
     resize(800, 600);

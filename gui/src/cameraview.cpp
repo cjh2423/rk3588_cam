@@ -4,6 +4,8 @@
  */
 
 #include "cameraview.h"
+#include "config/config_manager.h" // 新增
+#include "settings_dialog.h" // 新增
 
 CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     auto *layout = new QVBoxLayout(this);
@@ -25,14 +27,17 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
     auto *btnLayout = new QHBoxLayout();
     m_btnManage = new QPushButton("用户管理", this);
     m_btnRegister = new QPushButton("人脸注册", this);
+    m_btnSettings = new QPushButton("系统设置", this);
     m_closeButton = new QPushButton("退出", this);
     
     m_btnManage->setFixedHeight(40);
     m_btnRegister->setFixedHeight(40);
+    m_btnSettings->setFixedHeight(40);
     m_closeButton->setFixedHeight(40);
     
     btnLayout->addWidget(m_btnManage);
     btnLayout->addWidget(m_btnRegister);
+    btnLayout->addWidget(m_btnSettings);
     btnLayout->addWidget(m_closeButton);
 
     layout->addWidget(m_imageLabel);
@@ -41,6 +46,7 @@ CameraView::CameraView(QWidget *parent) : QWidget(parent) {
 
     connect(m_btnManage, &QPushButton::clicked, this, &CameraView::openUserManager);
     connect(m_btnRegister, &QPushButton::clicked, this, &CameraView::openRegistration);
+    connect(m_btnSettings, &QPushButton::clicked, this, &CameraView::openSettings);
     connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
     setWindowTitle("RK3588 智能相机演示");
 }
@@ -51,6 +57,12 @@ void CameraView::updateFrame(const QImage &frame) {
 }
 
 void CameraView::updateStats(float fps, double /*unused*/, float inferFps, double latency, float postFps, double postLatency) {
+    if (!ConfigManager::instance().isShowFps()) {
+        m_statsLabel->setVisible(false);
+        return;
+    }
+    m_statsLabel->setVisible(true);
+
     // 更新 FPS 和 NPU 性能文字
     QString text = QString("Cam: %1 FPS\nNPU: %2 FPS (%3 ms)\nPost: %4 FPS (%5 ms)")
                        .arg(static_cast<double>(fps), 0, 'f', 1)
@@ -59,4 +71,9 @@ void CameraView::updateStats(float fps, double /*unused*/, float inferFps, doubl
                        .arg(static_cast<double>(postFps), 0, 'f', 1)
                        .arg(static_cast<double>(postLatency), 0, 'f', 1);
     m_statsLabel->setText(text);
+}
+
+void CameraView::openSettings() {
+    SettingsDialog dlg(this);
+    dlg.exec();
 }

@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>  // 引入 cout 所在的头文件
 #include <cstdlib>
-#include "config.h"
+#include "config/config.h"
 // app
 #include "app/app_controller.h"
 // gui

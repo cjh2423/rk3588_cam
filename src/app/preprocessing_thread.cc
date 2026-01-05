@@ -17,8 +17,8 @@
 
 #include "app/preprocessing_thread.h"
 #include <iostream>
-#include "config.h"  // 必须引用配置，确保分辨率统一
-#include "RgaUtils.h"
+#include "config/config.h"  // 必须引用配置，确保分辨率统一
+#include "hardware/camera_device.h"
 #include "im2d.h"
 #include "rga.h"
 #include <chrono>

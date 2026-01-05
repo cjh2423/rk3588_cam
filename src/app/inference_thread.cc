@@ -9,7 +9,7 @@
 #include "app/inference_thread.h"
 #include <iostream>
 #include <chrono>
-#include "config.h" // 新增
+#include "config/config.h" // 新增
 
 InferenceThread::InferenceThread(ModelManager* model_manager, PerformanceMonitor* monitor, PostProcessThread* post_thread)
     : model_manager_(model_manager)

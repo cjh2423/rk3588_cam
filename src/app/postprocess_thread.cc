@@ -7,7 +7,8 @@
 #include "app/postprocess_thread.h"
 #include <iostream>
 #include <opencv2/imgproc.hpp>
-#include "config.h"
+#include "config/config.h"
+#include "config/config_manager.h" // 新增
 #include "core/postprocess.h"
 #include "core/facenet.h"
 #include "service/feature_library.h"
@@ -139,7 +140,8 @@ void PostProcessThread::thread_loop() {
 
                         // 搜索
                         float similarity = 0.0f;
-                        int64_t user_id = service::FeatureLibrary::instance().search(feature, FACENET_THRESH, similarity);
+                        // 使用配置管理器的动态阈值
+                        int64_t user_id = service::FeatureLibrary::instance().search(feature, ConfigManager::instance().getRecognitionThreshold(), similarity);
                         
                         if (user_id != -1) {
                             db::UserDao userDao;
