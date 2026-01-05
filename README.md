@@ -4,9 +4,10 @@
 本项目是一个专为 **Rockchip RK3588** 设计的高效异步视频处理框架。它实现了采集、预处理（RGA）、AI 推理（RKNN）、数据库管理（SQLite）与 UI 渲染（Qt5）的完全解耦。
 
 ### 核心特性
-*   **双异步线程**：
+*   **三级流水线架构**：
     1.  **PreprocessingThread**: 负责 V4L2 采集与 RGA 硬件加速（缩放、翻转）。
-    2.  **InferenceThread**: 负责 NPU 推理（YOLOv8-face 检测 + FaceNet 特征提取）与识别逻辑。
+    2.  **InferenceThread**: 专注 NPU 推理（YOLOv8-face 人脸检测），高吞吐。
+    3.  **PostprocessThread**: 负责后处理（NMS）、FaceNet 特征提取与数据库识别。
 *   **人脸识别 & 考勤**：
     *   实时检测人脸并与数据库特征比对。
     *   **可视化反馈**：已知用户显示**绿框+姓名**，未知用户显示**红框**。

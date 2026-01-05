@@ -300,11 +300,12 @@ void AppController::onFrameTick() {
                     rawTask.orig_img.step, 
                     QImage::Format_RGB888);
 
-        // 显示：交换颜色通道 (BGR->RGB)
+        // 显示：交换颜色通道 (BGR->RGB)只执行一次 rgbSwapped，避免双重拷贝
+        QImage displayImg = qimg.rgbSwapped();
         if (m_view) {
-            m_view->updateFrame(qimg.rgbSwapped()); 
+            m_view->updateFrame(displayImg); 
         }
-        emit frameReady(qimg.rgbSwapped()); // 广播信号
+        emit frameReady(displayImg); // 广播信号
     }
 #endif
 }
